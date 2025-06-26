@@ -37,8 +37,9 @@ func (u *UserService) IsPwdSuccess(userName string, pwd string) (user *datamodel
 }
 
 func (u *UserService) AddUser(user *datamodels.User) (userId int64, err error) {
-	pwdByte, errPwd := GeneratePassword(user.HashPassword)
-	if errPwd != nil {
+	var pwdByte []byte
+	var errPwd error
+	if pwdByte, errPwd = GeneratePassword(user.HashPassword); errPwd != nil {
 		return userId, errPwd
 	}
 	user.HashPassword = string(pwdByte)

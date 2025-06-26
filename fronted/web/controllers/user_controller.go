@@ -22,26 +22,16 @@ func (c *UserController) GetRegister() mvc.View {
 	}
 }
 
-func (c *UserController) PostRegister() {
-	var (
-		nickName = c.Ctx.FormValue("nickName")
-		userName = c.Ctx.FormValue("userName")
-		password = c.Ctx.FormValue("password")
-	)
-	user := &datamodels.User{
-		UserName:     userName,
-		NickName:     nickName,
-		HashPassword: password,
+func (c *UserController) PostRegister() mvc.Response {
+	user := new(datamodels.User)
+	if err := c.Ctx.ReadForm(user); err != nil {
+		c.Ctx.Application().Logger().Errorf("bind form to User failed: %v", err)
+		return mvc.Response{Path: "/user/error"}
 	}
-
-	_, err := c.Service.AddUser(user)
-	c.Ctx.Application().Logger().Debug(err)
-	if err != nil {
-		c.Ctx.Redirect("/user/error")
-		return
+	if _, err := c.Service.AddUser(user); err != nil {
+		return mvc.Response{Path: "/user/error"}
 	}
-	c.Ctx.Redirect("/user/login")
-	return
+	return mvc.Response{Path: "/user/login"}
 }
 
 func (c *UserController) GetLogin() mvc.View {
@@ -52,16 +42,13 @@ func (c *UserController) GetLogin() mvc.View {
 
 func (c *UserController) PostLogin() mvc.Response {
 	//1.获取用户提交的表单信息
-	var (
-		userName = c.Ctx.FormValue("userName")
-		password = c.Ctx.FormValue("password")
-	)
+	user := new(datamodels.User)
+	if err := c.Ctx.ReadForm(user); err != nil {
+		c.Ctx.Application().Logger().Errorf("bind form to User failed: %v", err)
+	}
 	//2、验证账号密码正确
-	user, isOk := c.Service.IsPwdSuccess(userName, password)
-	if !isOk {
-		return mvc.Response{
-			Path: "/user/login",
-		}
+	if _, isOk := c.Service.IsPwdSuccess(user.UserName, user.HashPassword); isOk {
+		return mvc.Response{Path: "/user/login"}
 	}
 
 	//3、写入用户ID到cookie中
