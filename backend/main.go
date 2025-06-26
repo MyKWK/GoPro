@@ -33,22 +33,25 @@ func main() {
 		ctx.View("shared/error.html")
 	})
 	// DataBase
-	db := common.NewMysqlConn()
+	db, err := common.NewMysqlConn()
+	if err != nil {
+		panic(err)
+	}
 
 	// 上下文
 	ctx, cancle := context.WithCancel(context.Background())
 	defer cancle()
 
 	// 注册控制器:product
-	productRepo := repositories.NewProductManager("product", db) // 数据层操作
-	productService := services.NewProductService(productRepo)    // 服务层操作
-	productParty := app.Party("/product")                        // 创建一个路由分组，product开头的HTTP路径，会归这个分组
-	product := mvc.New(productParty)                             // MVC实例，与对应分组绑定
+	productRepo := repositories.NewProductManager(db)         // 数据层操作
+	productService := services.NewProductService(productRepo) // 服务层操作
+	productParty := app.Party("/product")                     // 创建一个路由分组，product开头的HTTP路径，会归这个分组
+	product := mvc.New(productParty)                          // MVC实例，与对应分组绑定
 	product.Register(ctx, productService)
 	product.Handle(new(controllers.ProductController))
 
 	// 注册控制器:order
-	orderRepo := repositories.NewOrderManagerRepository("order", db)
+	orderRepo := repositories.NewOrderManagerRepository(db)
 	orderService := services.NewOrderService(orderRepo)
 	orderParty := app.Party("/order")
 	order := mvc.New(orderParty)
@@ -56,7 +59,7 @@ func main() {
 	order.Handle(new(controllers.OrderController))
 
 	// 三、启动
-	err := app.Run(
+	err = app.Run(
 		iris.Addr("localhost:9999"),
 		iris.WithoutServerError(iris.ErrServerClosed),
 		iris.WithOptimizations,
