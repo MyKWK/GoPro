@@ -14,11 +14,10 @@ type IUserRepository interface {
 }
 
 func NewUserRepository(table string, db *gorm.DB) IUserRepository {
-	return &UserManagerRepository{table, db}
+	return &UserManagerRepository{db}
 }
 
 type UserManagerRepository struct {
-	table     string
 	mysqlConn *gorm.DB
 }
 
@@ -29,9 +28,6 @@ func (u *UserManagerRepository) Conn() (err error) {
 			return err
 		}
 		u.mysqlConn = mysql
-	}
-	if u.table == "" {
-		u.table = "user"
 	}
 	return
 }

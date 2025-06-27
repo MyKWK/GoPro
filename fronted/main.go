@@ -2,6 +2,7 @@ package main
 
 import (
 	"awesomeProject/common"
+	"awesomeProject/fronted/middleware"
 	"awesomeProject/fronted/web/controllers"
 	"awesomeProject/repositories"
 	"awesomeProject/services"
@@ -15,6 +16,7 @@ import (
 func main() {
 	//1.创建iris 实例
 	app := iris.New()
+
 	//2.设置错误模式，在mvc模式下提示错误
 	app.Logger().SetLevel("debug")
 	//3.注册模板
@@ -41,19 +43,37 @@ func main() {
 		Cookie:  "AdminCookie",
 		Expires: 600 * time.Minute,
 	})
+	app.UseRouter(sess.Handler())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	user := repositories.NewUserRepository("user", db)
-	userService := services.NewService(user)
-	userPro := mvc.New(app.Party("/user"))
-	userPro.Register(userService, ctx, sess.Start)
-	userPro.Handle(new(controllers.UserController))
+	// 注册user
+	user := repositories.NewUserRepository("user", db) // 封装了db操作
+	userService := services.NewService(user)           // 封装了数据操作层
+	userParty := mvc.New(app.Party("/user"))           // 设定分组 user开头
+	userParty.Register(userService, ctx, sess)         // 注册
+	userParty.Handle(new(controllers.UserController))  // 将一个控制器实例（UserController）注册到这个 MVC 应用上。
 
-	app.Run(
+	//注册product控制器
+	orderManager := repositories.NewOrderManagerRepository(db)
+	orderService := services.NewOrderService(orderManager)
+
+	product := repositories.NewProductManager(db)
+	productService := services.NewProductService(product)
+	productParty := app.Party("/product")
+	productParty.Use(middleware.AuthConProduct)
+
+	pro := mvc.New(productParty) //?
+	pro.Register(productService, orderService)
+	pro.Handle(new(controllers.ProductController))
+
+	err = app.Run(
 		iris.Addr("0.0.0.0:9998"),
 		iris.WithoutServerError(iris.ErrServerClosed),
 		iris.WithOptimizations,
 	)
+	if err != nil {
+		return
+	}
 
 }
