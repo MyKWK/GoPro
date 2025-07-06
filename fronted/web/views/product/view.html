@@ -332,10 +332,10 @@
 
                 <span class="product-single__price">
               <ins>
-                <span class="amount">$117.99</span>
+                <span class="amount">{{.product.OriginalPrice}}</span>
               </ins>
               <del>
-                <span>$300.00</span>
+                <span>{{.product.NewPrice}}</span>
               </del>
             </span>
 
@@ -362,7 +362,7 @@
                                 <span ><a href="/product/order?productID={{.product.ID}}">立即抢购</a> </span>
 
                             </a>
-                        </div>
+                        </div> 
                         <div class="col">
                             <a href="#" class="btn btn-lg btn-dark product-single__add-to-wishlist">
                                 <i class="ui-heart"></i>

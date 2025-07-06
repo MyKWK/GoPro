@@ -61,7 +61,7 @@ func main() {
 	product := repositories.NewProductManager(db)
 	productService := services.NewProductService(product)
 	productParty := app.Party("/product")
-	productParty.Use(middleware.AuthConProduct)
+	productParty.Use(middleware.AuthConProduct) // 挂载中间件
 
 	pro := mvc.New(productParty) //?
 	pro.Register(productService, orderService)

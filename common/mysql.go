@@ -27,7 +27,7 @@ func NewMysqlConn() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err := db.AutoMigrate(&datamodels.User{}); err != nil {
+	if err := db.AutoMigrate(&datamodels.User{}, &datamodels.Product{}, &datamodels.Order{}); err != nil {
 		return nil, err
 	}
 
