@@ -4,6 +4,7 @@ import (
 	"awesomeProject/datamodels"
 	"awesomeProject/services"
 	"awesomeProject/tool"
+	"fmt"
 	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/mvc"
 	"github.com/kataras/iris/v12/sessions"
@@ -46,12 +47,14 @@ func (c *UserController) PostLogin() mvc.Response {
 	if err := c.Ctx.ReadForm(user); err != nil {
 		c.Ctx.Application().Logger().Errorf("bind form to User failed: %v", err)
 	}
+	fmt.Println(user)
 	//2、验证账号密码正确
 	if _, isOk := c.Service.IsPwdSuccess(user.UserName, user.HashPassword); isOk {
+		fmt.Println("登录成功")
 		return mvc.Response{Path: "/user/login"}
 	}
 
-	//3、写入用户ID到cookie中
+	//3、写入用户ID到cookie中，但是用户id需要加密
 	tool.GlobalCookie(c.Ctx, "uid", strconv.FormatInt(user.ID, 10))
 	c.Session.Set("userID", strconv.FormatInt(user.ID, 10))
 

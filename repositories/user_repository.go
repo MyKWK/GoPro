@@ -4,6 +4,7 @@ import (
 	"awesomeProject/common"
 	"awesomeProject/datamodels"
 	"errors"
+	"fmt"
 	"gorm.io/gorm"
 )
 
@@ -52,13 +53,18 @@ func (u *UserManagerRepository) Select(userName string) (user *datamodels.User, 
 
 func (u *UserManagerRepository) Insert(user *datamodels.User) (userId int64, err error) {
 	if err = u.Conn(); err != nil {
+		fmt.Println("数据库没连上")
 		return
 	}
+	fmt.Println("正在新建用户信息")
 	if err = u.mysqlConn.Create(user).Error; err != nil {
+		fmt.Println("插入失败了：")
+		fmt.Println(err)
 		return
 	} else {
 		userId = user.ID
 	}
+	fmt.Println("新用户注册成功")
 	return
 }
 

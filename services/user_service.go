@@ -4,6 +4,7 @@ import (
 	"awesomeProject/datamodels"
 	"awesomeProject/repositories"
 	"errors"
+	"fmt"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,10 +24,13 @@ type UserService struct {
 func (u *UserService) IsPwdSuccess(userName string, pwd string) (user *datamodels.User, isOk bool) {
 
 	user, err := u.UserRepository.Select(userName)
+	fmt.Println(user)
 
 	if err != nil {
 		return
 	}
+	fmt.Println("开始验证密码是否正确")
+
 	isOk, _ = ValidatePassword(pwd, user.HashPassword)
 
 	if !isOk {
@@ -43,6 +47,7 @@ func (u *UserService) AddUser(user *datamodels.User) (userId int64, err error) {
 		return userId, errPwd
 	}
 	user.HashPassword = string(pwdByte)
+	fmt.Println("正在准备插入用户信息")
 	return u.UserRepository.Insert(user)
 }
 
@@ -51,6 +56,7 @@ func GeneratePassword(userPassword string) ([]byte, error) {
 }
 
 func ValidatePassword(userPassword string, hashed string) (isOK bool, err error) {
+	fmt.Println("开始验证密码是否正确")
 	if err = bcrypt.CompareHashAndPassword([]byte(hashed), []byte(userPassword)); err != nil {
 		return false, errors.New("密码比对错误！")
 	}
