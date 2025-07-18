@@ -9,8 +9,6 @@ import (
 	"context"
 	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/mvc"
-	"github.com/kataras/iris/v12/sessions"
-	"time"
 )
 
 func main() {
@@ -39,11 +37,6 @@ func main() {
 	if err != nil {
 
 	}
-	sess := sessions.New(sessions.Config{
-		Cookie:  "AdminCookie",
-		Expires: 600 * time.Minute,
-	})
-	app.UseRouter(sess.Handler())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -51,7 +44,7 @@ func main() {
 	user := repositories.NewUserRepository("user", db) // 封装了db操作
 	userService := services.NewService(user)           // 封装了数据操作层
 	userParty := mvc.New(app.Party("/user"))           // 设定分组 user开头
-	userParty.Register(userService, ctx, sess)         // 注册
+	userParty.Register(userService, ctx)               // 注册
 	userParty.Handle(new(controllers.UserController))  // 将一个控制器实例（UserController）注册到这个 MVC 应用上。
 
 	//注册product控制器

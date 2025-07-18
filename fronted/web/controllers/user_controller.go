@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"awesomeProject/datamodels"
+	"awesomeProject/encrypt"
 	"awesomeProject/services"
 	"awesomeProject/tool"
 	"fmt"
@@ -49,14 +50,17 @@ func (c *UserController) PostLogin() mvc.Response {
 	}
 	fmt.Println(user)
 	//2、验证账号密码正确
-	if _, isOk := c.Service.IsPwdSuccess(user.UserName, user.HashPassword); isOk {
-		fmt.Println("登录成功")
+	if _, isOk := c.Service.IsPwdSuccess(user.UserName, user.HashPassword); !isOk {
+		fmt.Println("登录失败")
 		return mvc.Response{Path: "/user/login"}
 	}
 
 	//3、写入用户ID到cookie中，但是用户id需要加密
-	tool.GlobalCookie(c.Ctx, "uid", strconv.FormatInt(user.ID, 10))
-	c.Session.Set("userID", strconv.FormatInt(user.ID, 10))
+	uidString, err := encrypt.EnPwdCode([]byte(strconv.FormatInt(user.ID, 10)))
+	if err != nil {
+		c.Ctx.Application().Logger().Errorf("encrypt code failed: %v", err)
+	}
+	tool.GlobalCookie(c.Ctx, "uidString", uidString)
 
 	return mvc.Response{
 		Path: "/product/",

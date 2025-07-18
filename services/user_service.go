@@ -29,7 +29,6 @@ func (u *UserService) IsPwdSuccess(userName string, pwd string) (user *datamodel
 	if err != nil {
 		return
 	}
-	fmt.Println("开始验证密码是否正确")
 
 	isOk, _ = ValidatePassword(pwd, user.HashPassword)
 
