@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"awesomeProject/datamodels"
+	"fmt"
 	"gorm.io/gorm"
 )
 
@@ -54,4 +55,23 @@ func (p *ProductManager) SelectAll() ([]*datamodels.Product, error) {
 	var products []*datamodels.Product
 	err := p.db.Find(&products).Error
 	return products, err
+}
+
+func (p *ProductManager) SubProductNum(productID int64) error {
+	// 使用 GORM 来执行更新操作，避免拼接 SQL 语句
+	result := p.db.Model(&datamodels.Product{}).
+		Where("ID = ?", productID).
+		Update("productNum", gorm.Expr("productNum - ?", 1))
+
+	// 检查更新是否成功
+	if result.Error != nil {
+		return result.Error
+	}
+
+	// 如果没有更新任何行，说明没有该产品
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("product with ID %d not found", productID)
+	}
+
+	return nil
 }

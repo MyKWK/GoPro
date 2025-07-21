@@ -4,6 +4,7 @@ import (
 	"awesomeProject/common"
 	"awesomeProject/fronted/middleware"
 	"awesomeProject/fronted/web/controllers"
+	"awesomeProject/rabbitmq"
 	"awesomeProject/repositories"
 	"awesomeProject/services"
 	"context"
@@ -47,6 +48,9 @@ func main() {
 	userParty.Register(userService, ctx)               // 注册
 	userParty.Handle(new(controllers.UserController))  // 将一个控制器实例（UserController）注册到这个 MVC 应用上。
 
+	// 注册RabbitMQ
+	rabbitMQSimple := rabbitmq.NewRabbitMQSimple("iMooc")
+
 	//注册product控制器
 	orderManager := repositories.NewOrderManagerRepository(db)
 	orderService := services.NewOrderService(orderManager)
@@ -57,7 +61,7 @@ func main() {
 	productParty.Use(middleware.AuthConProduct) // 挂载中间件
 
 	pro := mvc.New(productParty) //?
-	pro.Register(productService, orderService)
+	pro.Register(productService, orderService, ctx, rabbitMQSimple)
 	pro.Handle(new(controllers.ProductController))
 
 	err = app.Run(
