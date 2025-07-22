@@ -12,6 +12,7 @@ type IProduct interface {
 	Update(product *datamodels.Product) (int64, error)         // 更新产品，返回影响的行数
 	SelectByKey(productKey int64) (*datamodels.Product, error) // 根据ID查询单个产品
 	SelectAll() ([]*datamodels.Product, error)                 // 查询所有产品
+	SubProductNum(productID int64) error
 }
 
 type ProductManager struct {
