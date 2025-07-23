@@ -44,7 +44,6 @@ func (r *RabbitMQ) Destory() {
 func (r *RabbitMQ) failOnErr(err error, message string) {
 	if err != nil {
 		log.Fatalf("%s:%s", message, err)
-		panic(fmt.Sprintf("%s:%s", message, err))
 	}
 }
 
@@ -99,31 +98,18 @@ func (r *RabbitMQ) PublishSimple(message string) error {
 	return nil
 }
 
-// simple 模式下消费者
+// ConsumeSimple simple 模式下消费者
 func (r *RabbitMQ) ConsumeSimple(orderService services.IOrderService, productService services.IProductService) {
-	//1.申请队列，如果队列不存在会自动创建，存在则跳过创建
-	q, err := r.channel.QueueDeclare(
-		r.QueueName,
-		//是否持久化
-		false,
-		//是否自动删除
-		false,
-		//是否具有排他性
-		false,
-		//是否阻塞处理
-		false,
-		//额外的属性
-		nil,
-	)
+	q, err := r.channel.QueueDeclare(r.QueueName, false, false, false, false, nil)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	//消费者流控
+	// 在ACK之前，mq还能推送多少信息给当前消费者
 	r.channel.Qos(
-		1,     //当前消费者一次能接受的最大消息数量
-		0,     //服务器传递的最大容量（以八位字节为单位）
-		false, //如果设置为true 对channel可用
+		1,     // 未ack消息条数
+		0,     // 未ack消息最大字节
+		false, //如果设置为true ，则当前连接的所有channel共享这套限流
 	)
 
 	//接收消息
@@ -146,14 +132,13 @@ func (r *RabbitMQ) ConsumeSimple(orderService services.IOrderService, productSer
 		fmt.Println(err)
 	}
 
-	forever := make(chan bool)
 	//启用协程处理消息
 	go func() {
 		for d := range msgs {
 			//消息逻辑处理，可以自行设计逻辑
 			log.Printf("Received a message: %s", d.Body)
 			message := &datamodels.Message{}
-			err := json.Unmarshal([]byte(d.Body), message)
+			err := json.Unmarshal(d.Body, message) // 没有tag的话，则按照字段名首字母小写匹配
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -162,7 +147,6 @@ func (r *RabbitMQ) ConsumeSimple(orderService services.IOrderService, productSer
 			if err != nil {
 				fmt.Println(err)
 			}
-
 			//扣除商品数量
 			err = productService.SubNumberOne(message.ProductID)
 			if err != nil {
@@ -175,6 +159,6 @@ func (r *RabbitMQ) ConsumeSimple(orderService services.IOrderService, productSer
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-forever
+	select {}
 
 }
