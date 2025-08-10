@@ -42,7 +42,7 @@ type AccessControl struct {
 // 创建全局变量
 var accessControl = &AccessControl{sourcesArray: make(map[int]interface{})}
 
-// 获取制定的数据
+// GetNewRecord 获取制定的数据
 func (m *AccessControl) GetNewRecord(uid int) interface{} {
 	m.RWMutex.RLock()
 	defer m.RWMutex.RUnlock()
@@ -50,7 +50,7 @@ func (m *AccessControl) GetNewRecord(uid int) interface{} {
 	return data
 }
 
-// 设置记录
+// SetNewRecord 设置记录
 func (m *AccessControl) SetNewRecord(uid int) {
 	m.RWMutex.Lock()
 	m.sourcesArray[uid] = "hello imooc"
@@ -293,7 +293,7 @@ func main() {
 	localHost = "localhost"
 	fmt.Println(localHost)
 
-	rabbitMqValidate = rabbitmq.NewRabbitMQSimple("imoocProduct")
+	rabbitMqValidate = rabbitmq.NewRabbitMQSimple("IMOOC")
 	defer rabbitMqValidate.Destory()
 
 	//1、过滤器
