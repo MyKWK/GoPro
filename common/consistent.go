@@ -26,7 +26,7 @@ func (x units) Swap(i, j int) {
 // 当hash环上没有数据时，提示错误
 var errEmpty = errors.New("Hash 环没有数据")
 
-// 创建结构体保存一致性hash信息
+// Consistent 创建结构体保存一致性hash信息
 type Consistent struct {
 	circle       map[uint32]string // hash -> node
 	sortedHashes units             // 已经排序的切片
@@ -36,7 +36,7 @@ type Consistent struct {
 	sync.RWMutex
 }
 
-// 创建一致性hash算法结构体，设置默认节点数量
+// NewConsistent 创建一致性hash算法结构体，设置默认节点数量
 func NewConsistent() *Consistent {
 	return &Consistent{
 		//初始化变量
@@ -83,7 +83,6 @@ func (c *Consistent) updateSortedHashes() {
 	sort.Sort(hashes)
 	//重新赋值
 	c.sortedHashes = hashes
-
 }
 
 // 向hash环中添加节点
@@ -121,22 +120,7 @@ func (c *Consistent) Remove(element string) {
 	c.remove(element)
 }
 
-// 顺时针查找最近的节点
-func (c *Consistent) search(key uint32) int {
-	//查找算法
-	f := func(x int) bool {
-		return c.sortedHashes[x] > key
-	}
-	//使用"二分查找"算法来搜索指定切片满足条件的最小值
-	i := sort.Search(len(c.sortedHashes), f)
-	//如果超出范围则设置i=0
-	if i >= len(c.sortedHashes) {
-		i = 0
-	}
-	return i
-}
-
-// 通过 UID 等定位一个具体的服务器节点，保证稳定路由。
+// Get 通过 UID 等定位一个具体的服务器节点，保证稳定路由。
 func (c *Consistent) Get(name string) (string, error) {
 	//添加锁
 	c.RLock()
@@ -151,4 +135,19 @@ func (c *Consistent) Get(name string) (string, error) {
 	i := c.search(key)
 	return c.circle[c.sortedHashes[i]], nil
 
+}
+
+// 顺时针查找最近的节点
+func (c *Consistent) search(key uint32) int {
+	//查找算法
+	f := func(x int) bool {
+		return c.sortedHashes[x] > key
+	}
+	//使用"二分查找"算法来搜索指定切片满足条件的最小值
+	i := sort.Search(len(c.sortedHashes), f)
+	//如果超出范围则设置i=0
+	if i >= len(c.sortedHashes) {
+		i = 0
+	}
+	return i
 }

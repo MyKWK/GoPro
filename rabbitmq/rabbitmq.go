@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"github.com/streadway/amqp"
 	"log"
+	"time"
 
 	"awesomeProject/datamodels"
 	"awesomeProject/services"
 	"encoding/json"
+	"os"
+	"strconv"
 	"sync"
 )
 
@@ -27,6 +30,9 @@ type RabbitMQ struct {
 	//连接信息
 	Mqurl string
 	sync.Mutex
+	// 用来做确认
+	ackCh chan amqp.Confirmation // 表示Broker 对一条发布消息的确认信息
+	retCh chan amqp.Return       // 表示一条无法被路由到任何队列的消息被 Broker 退回时携带的完整信息
 }
 
 // 创建结构体实例
@@ -59,6 +65,15 @@ func NewRabbitMQSimple(queueName string) *RabbitMQ {
 	//获取channel
 	rabbitmq.channel, err = rabbitmq.conn.Channel()
 	rabbitmq.failOnErr(err, "failed to open a channel")
+	// 开启 confirm 模式（一次即可）
+	err = rabbitmq.channel.Confirm(false)
+	rabbitmq.failOnErr(err, "channel confirm mode failed")
+
+	rabbitmq.ackCh = rabbitmq.channel.NotifyPublish(make(chan amqp.Confirmation, 1))
+	// 指示 broker 对每条发布按顺序回一个 Ack/Nack；
+	//这个通道里异步接收 Broker 发回的 发布确认事件（Ack/Nack）（接受/拒绝）
+	rabbitmq.retCh = rabbitmq.channel.NotifyReturn(make(chan amqp.Return, 1)) //
+	// 用来接收 Broker 退回的消息
 	return rabbitmq
 }
 
@@ -70,7 +85,7 @@ func (r *RabbitMQ) PublishSimple(message string) error {
 	_, err := r.channel.QueueDeclare(
 		r.QueueName,
 		//是否持久化
-		false,
+		true,
 		//是否自动删除
 		false,
 		//是否具有排他性
@@ -84,32 +99,67 @@ func (r *RabbitMQ) PublishSimple(message string) error {
 		return err
 	}
 	//调用channel 发送消息到队列中
-	r.channel.Publish(
+	err = r.channel.Publish(
 		r.Exchange,
 		r.QueueName,
-		//如果为true，根据自身exchange类型和routekey规则无法找到符合条件的队列会把消息返还给发送者
-		false,
-		//如果为true，当exchange发送消息到队列后发现队列上没有消费者，则会把消息返还给发送者
-		false,
+		true,  // mandatory: 无人接受则返回消息给发布者
+		false, // immediate 已废弃，保持 false
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(message),
-		})
+			ContentType:  "text/plain",
+			DeliveryMode: amqp.Persistent, // 你已设置：持久化消息
+			Body:         []byte(message),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// 等待 Return/Ack/Nack/超时（谁先来用谁）
+	select {
+	case ret := <-r.retCh:
+		// 不可路由（通常是 exchange/routingKey/绑定错）
+		return fmt.Errorf("publish returned (unroutable): code=%d text=%s key=%s",
+			ret.ReplyCode, ret.ReplyText, ret.RoutingKey)
+
+	case c := <-r.ackCh:
+		if !c.Ack {
+			return fmt.Errorf("publish NACKed by broker")
+		}
+		// Ack=确认成功（对持久消息+持久队列，表示已安全接收并写盘）
+
+	case <-time.After(2 * time.Second):
+		// 超时：视为失败，让上层重试（建议做指数退避）
+		return fmt.Errorf("publish confirm timeout")
+	}
+
 	return nil
 }
 
 // ConsumeSimple simple 模式下消费者
 func (r *RabbitMQ) ConsumeSimple(orderService services.IOrderService, productService services.IProductService) {
-	q, err := r.channel.QueueDeclare(r.QueueName, false, false, false, false, nil)
+	q, err := r.channel.QueueDeclare(
+		r.QueueName,
+		true,
+		false,
+		false,
+		false,
+		nil)
 	if err != nil {
 		fmt.Println(err)
 	}
 
+	// 可配置的 prefetch（默认 32，可通过环境变量 MQ_PREFETCH 覆盖）
+	prefetch := 32
+	if v := os.Getenv("MQ_PREFETCH"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			prefetch = n
+		}
+	}
 	// 在ACK之前，mq还能推送多少信息给当前消费者
 	r.channel.Qos(
-		1,     // 未ack消息条数
-		0,     // 未ack消息最大字节
-		false, //如果设置为true ，则当前连接的所有channel共享这套限流
+		prefetch, // 未ack消息条数
+		0,        // 未ack消息最大字节
+		false,    //如果设置为true ，则当前连接的所有channel共享这套限流
 	)
 
 	//接收消息
@@ -132,31 +182,39 @@ func (r *RabbitMQ) ConsumeSimple(orderService services.IOrderService, productSer
 		fmt.Println(err)
 	}
 
-	//启用协程处理消息
-	go func() {
-		for d := range msgs {
-			//消息逻辑处理，可以自行设计逻辑
-			log.Printf("Received a message: %s", d.Body)
-			message := &datamodels.Message{}
-			err := json.Unmarshal(d.Body, message) // 没有tag的话，则按照字段名首字母小写匹配
-			if err != nil {
-				fmt.Println(err)
-			}
-			//插入订单
-			_, err = orderService.InsertOrderByMessage(message)
-			if err != nil {
-				fmt.Println(err)
-			}
-			//扣除商品数量
-			err = productService.SubNumberOne(message.ProductID)
-			if err != nil {
-				fmt.Println(err)
-			}
-			//如果为true表示确认所有未确认的消息，
-			//为false表示确认当前消息
-			d.Ack(false)
+	// 并发消费：启动多个 worker 读取同一个 msgs（默认 16 个，可用 MQ_WORKERS 调整）
+	workers := 16
+	if v := os.Getenv("MQ_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			workers = n
 		}
-	}()
+	}
+	for i := 0; i < workers; i++ {
+		go func() {
+			for d := range msgs {
+				//消息逻辑处理，可以自行设计逻辑
+				log.Printf("Received a message: %s", d.Body)
+				message := &datamodels.Message{}
+				err := json.Unmarshal(d.Body, message) // 没有tag的话，则按照字段名首字母小写匹配
+				if err != nil {
+					fmt.Println(err)
+				}
+				//插入订单
+				_, err = orderService.InsertOrderByMessage(message)
+				if err != nil {
+					fmt.Println(err)
+				}
+				//扣除商品数量
+				err = productService.SubNumberOne(message.ProductID)
+				if err != nil {
+					fmt.Println(err)
+				}
+				//如果为true表示确认所有未确认的消息，
+				//为false表示确认当前消息
+				d.Ack(false)
+			}
+		}()
+	}
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	select {}

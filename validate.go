@@ -16,7 +16,7 @@ import (
 )
 
 // 设置集群地址，最好内网IP
-var hostArray = []string{"192.168.0.106", "192.168.0.106"}
+var hostArray = []string{"192.168.0.106", "192.168.0.106", "localhost"}
 
 var localHost = ""
 
@@ -57,6 +57,7 @@ func (m *AccessControl) SetNewRecord(uid int) {
 	m.RWMutex.Unlock()
 }
 
+// GetDistributedRight 分布式权限验证
 func (m *AccessControl) GetDistributedRight(req *http.Request) bool {
 	//获取用户UID
 	uid, err := req.Cookie("uid")
@@ -81,7 +82,7 @@ func (m *AccessControl) GetDistributedRight(req *http.Request) bool {
 
 }
 
-// 获取本机map，并且处理业务逻辑，返回的结果类型为bool类型
+// GetDataFromMap 获取本机map，并且处理业务逻辑，返回的结果类型为bool类型
 func (m *AccessControl) GetDataFromMap(uid string) (isOk bool) {
 	//uidInt,err := strconv.Atoi(uid)
 	//if err !=nil {
@@ -96,7 +97,7 @@ func (m *AccessControl) GetDataFromMap(uid string) (isOk bool) {
 	return true
 }
 
-// 获取其它节点处理结果
+// GetDataFromOtherMap 获取其它节点处理结果
 func GetDataFromOtherMap(host string, request *http.Request) bool {
 	hostUrl := "http://" + host + ":" + port + "/checkRight"
 	response, body, err := GetCurl(hostUrl, request)
@@ -114,7 +115,7 @@ func GetDataFromOtherMap(host string, request *http.Request) bool {
 	return false
 }
 
-// 模拟请求
+// GetCurl 模拟请求
 func GetCurl(hostUrl string, request *http.Request) (response *http.Response, body []byte, err error) {
 	//获取Uid
 	uidPre, err := request.Cookie("uid")
@@ -134,7 +135,7 @@ func GetCurl(hostUrl string, request *http.Request) (response *http.Response, bo
 		return
 	}
 
-	//手动指定，排查多余cookies
+	// 将request中的Cookie数据添加到模拟的请求中
 	cookieUid := &http.Cookie{Name: "uid", Value: uidPre.Value, Path: "/"}
 	cookieSign := &http.Cookie{Name: "sign", Value: uidSign.Value, Path: "/"}
 	//添加cookie到模拟的请求中
@@ -151,6 +152,7 @@ func GetCurl(hostUrl string, request *http.Request) (response *http.Response, bo
 	return
 }
 
+// CheckRight 验证权限
 func CheckRight(w http.ResponseWriter, r *http.Request) {
 	right := accessControl.GetDistributedRight(r)
 	if !right {
@@ -163,11 +165,13 @@ func CheckRight(w http.ResponseWriter, r *http.Request) {
 
 // 执行正常业务逻辑
 func Check(w http.ResponseWriter, r *http.Request) {
+	// w 写入要发送给客户端的 HTTP 响应,服务端的输出流
+	// r 表示客户端发过来的 HTTP 请求对象，包含所有请求信息,服务端的输入流
 	//执行正常业务逻辑
 	fmt.Println("执行check！")
-	queryForm, err := url.ParseQuery(r.URL.RawQuery)
+	queryForm, err := url.ParseQuery(r.URL.RawQuery) // 也就是 ？ 之后的部分
 	if err != nil || len(queryForm["productID"]) <= 0 {
-		w.Write([]byte("false"))
+		w.Write([]byte(" query false"))
 		return
 	}
 	productString := queryForm["productID"][0]
@@ -199,7 +203,6 @@ func Check(w http.ResponseWriter, r *http.Request) {
 			//1.获取商品ID
 			productID, err := strconv.ParseInt(productString, 10, 64)
 			if err != nil {
-
 				w.Write([]byte("false"))
 				return
 			}
@@ -213,7 +216,7 @@ func Check(w http.ResponseWriter, r *http.Request) {
 
 			//3.创建消息体
 			message := datamodels.NewMessage(userID, productID)
-			//类型转化
+			//类型转化，转换成json，并且已经序列化了
 			byteMessage, err := json.Marshal(message)
 			if err != nil {
 				w.Write([]byte("false"))
@@ -244,7 +247,7 @@ func Auth(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// 身份校验函数
+// CheckUserInfo 身份校验函数
 func CheckUserInfo(r *http.Request) error {
 	//获取Uid，cookie
 	uidCookie, err := r.Cookie("uid")
@@ -262,10 +265,6 @@ func CheckUserInfo(r *http.Request) error {
 	if err != nil {
 		return errors.New("加密串已被篡改！")
 	}
-
-	//fmt.Println("结果比对")
-	//fmt.Println("用户ID：" + uidCookie.Value)
-	//fmt.Println("解密后用户ID：" + string(signByte))
 	if checkInfo(uidCookie.Value, string(signByte)) {
 		return nil
 	}
